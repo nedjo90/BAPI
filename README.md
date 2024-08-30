@@ -83,3 +83,221 @@ You can find further information in the OSS. The note 93091 contains general inf
 - **Erreur** : Les erreurs sont renvoyées via le paramètre RETURN.
 - **Zone de vente** : Si elle n'est pas définie, elle est déterminée automatiquement à partir des données du partenaire (client principal ou de livraison).
 - **Commit de base de données** : Nécessite un appel explicite à la BAPI BAPI_TRANSACTION_COMMIT pour valider les modifications dans la base de données.
+
+
+## Fonction module 'BAPI_SALESORDER_CREATEFROMDAT2'
+
+-> SE37 = 'BAPI_SALESORDER_CREATEFROMDAT2'
+
+```ABAP
+function bapi_salesorder_createfromdat2.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(SALESDOCUMENTIN) LIKE  BAPIVBELN-VBELN OPTIONAL
+*"     VALUE(ORDER_HEADER_IN) LIKE  BAPISDHD1 STRUCTURE  BAPISDHD1
+*"     VALUE(ORDER_HEADER_INX) LIKE  BAPISDHD1X STRUCTURE  BAPISDHD1X
+*"       OPTIONAL
+*"     VALUE(SENDER) LIKE  BAPI_SENDER STRUCTURE  BAPI_SENDER OPTIONAL
+*"     VALUE(BINARY_RELATIONSHIPTYPE) LIKE  BAPIRELTYPE-RELTYPE
+*"       OPTIONAL
+*"     VALUE(INT_NUMBER_ASSIGNMENT) LIKE  BAPIFLAG-BAPIFLAG OPTIONAL
+*"     VALUE(BEHAVE_WHEN_ERROR) LIKE  BAPIFLAG-BAPIFLAG OPTIONAL
+*"     VALUE(LOGIC_SWITCH) LIKE  BAPISDLS STRUCTURE  BAPISDLS OPTIONAL
+*"     VALUE(TESTRUN) LIKE  BAPIFLAG-BAPIFLAG OPTIONAL
+*"     VALUE(CONVERT) LIKE  BAPIFLAG-BAPIFLAG DEFAULT SPACE
+*"     VALUE(NO_DEQUEUE_ALL) TYPE  BAPIFLAG-BAPIFLAG DEFAULT SPACE
+*"  EXPORTING
+*"     VALUE(SALESDOCUMENT) LIKE  BAPIVBELN-VBELN
+*"  TABLES
+*"      RETURN STRUCTURE  BAPIRET2 OPTIONAL
+*"      ORDER_ITEMS_IN STRUCTURE  BAPISDITM OPTIONAL
+*"      ORDER_ITEMS_INX STRUCTURE  BAPISDITMX OPTIONAL
+*"      ORDER_PARTNERS STRUCTURE  BAPIPARNR
+*"      ORDER_SCHEDULES_IN STRUCTURE  BAPISCHDL OPTIONAL
+*"      ORDER_SCHEDULES_INX STRUCTURE  BAPISCHDLX OPTIONAL
+*"      ORDER_CONDITIONS_IN STRUCTURE  BAPICOND OPTIONAL
+*"      ORDER_CONDITIONS_INX STRUCTURE  BAPICONDX OPTIONAL
+*"      ORDER_CFGS_REF STRUCTURE  BAPICUCFG OPTIONAL
+*"      ORDER_CFGS_INST STRUCTURE  BAPICUINS OPTIONAL
+*"      ORDER_CFGS_PART_OF STRUCTURE  BAPICUPRT OPTIONAL
+*"      ORDER_CFGS_VALUE STRUCTURE  BAPICUVAL OPTIONAL
+*"      ORDER_CFGS_BLOB STRUCTURE  BAPICUBLB OPTIONAL
+*"      ORDER_CFGS_VK STRUCTURE  BAPICUVK OPTIONAL
+*"      ORDER_CFGS_REFINST STRUCTURE  BAPICUREF OPTIONAL
+*"      ORDER_CCARD STRUCTURE  BAPICCARD OPTIONAL
+*"      ORDER_TEXT STRUCTURE  BAPISDTEXT OPTIONAL
+*"      ORDER_KEYS STRUCTURE  BAPISDKEY OPTIONAL
+*"      EXTENSIONIN STRUCTURE  BAPIPAREX OPTIONAL
+*"      PARTNERADDRESSES STRUCTURE  BAPIADDR1 OPTIONAL
+*"      EXTENSIONEX STRUCTURE  BAPIPAREX OPTIONAL
+*"----------------------------------------------------------------------
+* generate data record
+  fbgenmac 'BAPI_SALESORDER_CREATEFROMDAT2'.
+* Core FLE MATNR BAPI Changes
+  include flematnrin1.
+* End Core FLE MATNR BAPI Changes
+
+* Begin FLE Segmentation BAPI changes
+  perform sfle_sgt_conversion
+  tables
+    order_items_in
+    order_items_inx
+   using ' '
+   changing return.
+* END FLE Segmentation BAPI changes
+ENHANCEMENT-POINT bapi_salesorder_createfrom_g8 SPOTS es_sapl2032 STATIC.
+
+ENHANCEMENT-POINT bapi_salesorder_createfrom_g6 SPOTS es_sapl2032.
+
+* BAPIs run without dialog
+  call function 'DIALOG_SET_NO_DIALOG'.
+
+ENHANCEMENT-SECTION     bapi_salesorder_createfromd_02 SPOTS es_sapl2032.
+"N_3223126 start of correction
+" checking if customer is using NFM solution. If no, then core SD_SALESDOCUMENT_CREATE should be called
+
+data: begin of g_mat_tbl1 occurs 10,
+        nemat(1),
+      end   of g_mat_tbl1.
+
+select single nf_flag from mvke  into g_mat_tbl1-nemat.
+if  g_mat_tbl1-nemat is not  initial.
+  "{ Begin ENHO /NFM/SD_BAPI_SALESORDER_CREA_1 IS-MP-NF /NFM/SD }
+* N 1523764 Refresh sv_bapi_data at start (FORM get_bapi_data)
+  data: new_bapi_data  type boole_d.
+
+  new_bapi_data = 'X'.
+  export new_bapi_data to memory id '/nfm/new_bapi_data'.
+
+* /NFM/ processing - C5007732
+  call function '/NFM/CA_BAPI_TRANSFER_DOCITM'
+    exporting
+      im_doc_type_nfm = 'A'
+      im_documentin   = salesdocumentin
+      im_simulation   = testrun
+    tables
+      t_nfmetallitms  = nfmetallitms
+      t_return        = return.
+* check if error occurred
+  loop at return transporting no fields
+                    where type = 'E' or
+                          type = 'A'.
+    exit.
+  endloop.
+  if sy-subrc <> 0.
+    "{ End ENHO /NFM/SD_BAPI_SALESORDER_CREA_1 IS-MP-NF /NFM/SD }
+    call function 'SD_SALESDOCUMENT_CREATE'
+      exporting
+        salesdocument           = salesdocumentin
+        sales_header_in         = order_header_in
+        sales_header_inx        = order_header_inx
+        sender                  = sender
+        binary_relationshiptype = binary_relationshiptype
+        int_number_assignment   = int_number_assignment
+        behave_when_error       = behave_when_error
+        logic_switch            = logic_switch
+        business_object         = 'BUS2032'
+        testrun                 = testrun
+        convert_parvw_auart     = convert
+        i_no_dequeue_all        = no_dequeue_all
+      importing
+        salesdocument_ex        = salesdocument
+      tables
+        return                  = return
+        sales_items_in          = order_items_in
+        sales_items_inx         = order_items_inx
+        sales_partners          = order_partners
+        sales_schedules_in      = order_schedules_in
+        sales_schedules_inx     = order_schedules_inx
+        sales_conditions_in     = order_conditions_in
+        sales_conditions_inx    = order_conditions_inx
+        sales_cfgs_ref          = order_cfgs_ref
+        sales_cfgs_inst         = order_cfgs_inst
+        sales_cfgs_part_of      = order_cfgs_part_of
+        sales_cfgs_value        = order_cfgs_value
+        sales_cfgs_blob         = order_cfgs_blob
+        sales_cfgs_vk           = order_cfgs_vk
+        sales_cfgs_refinst      = order_cfgs_refinst
+        sales_ccard             = order_ccard
+        sales_text              = order_text
+        sales_keys              = order_keys
+        extensionin             = extensionin
+        partneraddresses        = partneraddresses
+        extensionex             = extensionex.
+
+    "{ Begin ENHO /NFM/SD_BAPI_SALESORDER_CREA_1 IS-MP-NF /NFM/SD }
+* N 1523764 Refresh sv_bapi_data at start (FORM get_bapi_data)
+* /NFM/ processing - C5007732
+    call function '/NFM/CA_BAPI_DOCITM_GET'
+      tables
+        t_nfmetallitms = nfmetallitms.
+  endif.                             "sy-subrc <> 0.
+  "{ End ENHO /NFM/SD_BAPI_SALESORDER_CREA_1 IS-MP-NF /NFM/SD }
+else.
+  call function 'SD_SALESDOCUMENT_CREATE'
+    exporting
+      salesdocument           = salesdocumentin
+      sales_header_in         = order_header_in
+      sales_header_inx        = order_header_inx
+      sender                  = sender
+      binary_relationshiptype = binary_relationshiptype
+      int_number_assignment   = int_number_assignment
+      behave_when_error       = behave_when_error
+      logic_switch            = logic_switch
+      business_object         = 'BUS2032'
+      testrun                 = testrun
+      convert_parvw_auart     = convert
+      i_no_dequeue_all        = no_dequeue_all
+    importing
+      salesdocument_ex        = salesdocument
+    tables
+      return                  = return
+      sales_items_in          = order_items_in
+      sales_items_inx         = order_items_inx
+      sales_partners          = order_partners
+      sales_schedules_in      = order_schedules_in
+      sales_schedules_inx     = order_schedules_inx
+      sales_conditions_in     = order_conditions_in
+      sales_conditions_inx    = order_conditions_inx
+      sales_cfgs_ref          = order_cfgs_ref
+      sales_cfgs_inst         = order_cfgs_inst
+      sales_cfgs_part_of      = order_cfgs_part_of
+      sales_cfgs_value        = order_cfgs_value
+      sales_cfgs_blob         = order_cfgs_blob
+      sales_cfgs_vk           = order_cfgs_vk
+      sales_cfgs_refinst      = order_cfgs_refinst
+      sales_ccard             = order_ccard
+      sales_text              = order_text
+      sales_keys              = order_keys
+      extensionin             = extensionin
+      partneraddresses        = partneraddresses.
+endif.
+"N_3223126 end of correction
+END-ENHANCEMENT-SECTION.
+
+* reset the dialogflag
+  call function 'DIALOG_SET_WITH_DIALOG'.
+
+
+ENHANCEMENT-POINT bapi_salesorder_createfrom_g7 SPOTS es_sapl2032.
+*FLE MATNR BAPI Changes
+  include flematnrout1.
+* End FLE MATNR BAPI Changes
+
+* Begin FLE Segmentation BAPI changes
+  perform sfle_sgt_conversion
+  tables
+    order_items_in
+    order_items_inx
+   using 'X'
+   changing return.
+* END FLE Segmentation BAPI changes
+
+endfunction.
+```
+
+- Attributes: Processing Types = Remote-Enabled Module:
+  ![Attributes](./processing_type.png)
+- Import: ![Import](./import.png)
+- Export: ![Export](./export.png)
