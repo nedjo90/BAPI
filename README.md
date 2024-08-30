@@ -1,6 +1,3 @@
-Voici une version formatée avec la documentation et le résumé intégré, prête à être copiée dans votre README :
-
-```markdown
 # BAPI
 
 Une BAPI (Business Application Programming Interface) est une interface standardisée de SAP permettant d'accéder aux fonctionnalités des modules SAP via des programmes externes.
